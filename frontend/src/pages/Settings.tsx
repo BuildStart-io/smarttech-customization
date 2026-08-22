@@ -45,27 +45,16 @@ export default function Settings() {
   const { user } = useAuth();
   const { isGrowth } = useEffectivePlan();
 
-  // Welcome Message
-  const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [welcomeMediaUrl, setWelcomeMediaUrl] = useState("");
-  const [welcomeMediaUrls, setWelcomeMediaUrls] = useState<string[]>([]);
-  const [bypassTriggers, setBypassTriggers] = useState<string[]>([]);
-  const [newBypassTrigger, setNewBypassTrigger] = useState("");
-  // Welcome sequence: ordered list of items to send
-  type WelcomeSequenceItem = { type: "text" } | { type: "media"; url: string };
-  const [welcomeSequence, setWelcomeSequence] = useState<WelcomeSequenceItem[]>([]);
-
-  // Use refs to always have latest values for save
-  const welcomeMessageRef = useRef(welcomeMessage);
-  const welcomeMediaUrlRef = useRef(welcomeMediaUrl);
-  const welcomeMediaUrlsRef = useRef(welcomeMediaUrls);
-  const bypassTriggersRef = useRef(bypassTriggers);
-  const welcomeSequenceRef = useRef(welcomeSequence);
-  welcomeMessageRef.current = welcomeMessage;
-  welcomeMediaUrlRef.current = welcomeMediaUrl;
-  welcomeMediaUrlsRef.current = welcomeMediaUrls;
-  bypassTriggersRef.current = bypassTriggers;
-  welcomeSequenceRef.current = welcomeSequence;
+  type PredefinedMatch = {
+    id: string;
+    trigger_sentence: string;
+    reply_text: string;
+    media_urls: string[];
+    order: "text_first" | "media_first";
+  };
+  const [predefinedMatches, setPredefinedMatches] = useState<PredefinedMatch[]>([]);
+  const predefinedMatchesRef = useRef(predefinedMatches);
+  predefinedMatchesRef.current = predefinedMatches;
 
   // Payment Info - Multiple Bank Accounts
   const [bankAccounts, setBankAccounts] = useState<PaymentAccount[]>([
@@ -129,22 +118,10 @@ export default function Settings() {
 
       data?.forEach((setting) => {
         switch (setting.key) {
-          case "welcome_message": {
-            const wVal = setting.value as any;
-            setWelcomeMessage(wVal?.text || "");
-            setWelcomeMediaUrl(wVal?.media_url || "");
-            const urls: string[] = wVal?.media_urls || [];
-            setWelcomeMediaUrls(urls);
-            setBypassTriggers(wVal?.bypass_triggers || []);
-            // Load sequence or build default
-            if (wVal?.welcome_sequence && Array.isArray(wVal.welcome_sequence)) {
-              setWelcomeSequence(wVal.welcome_sequence);
-            } else {
-              // Build default sequence: text first, then media
-              const defaultSeq: WelcomeSequenceItem[] = [];
-              if (wVal?.text?.trim()) defaultSeq.push({ type: "text" });
-              urls.forEach((u: string) => defaultSeq.push({ type: "media", url: u }));
-              setWelcomeSequence(defaultSeq);
+          case "predefined_matches": {
+            const matches = setting.value as PredefinedMatch[];
+            if (Array.isArray(matches)) {
+              setPredefinedMatches(matches);
             }
             break;
           }
@@ -459,82 +436,33 @@ export default function Settings() {
     }
   };
 
-  const handleSaveWelcome = () => {
-    saveSettings("welcome_message", { 
-      text: welcomeMessageRef.current, 
-      media_url: welcomeMediaUrlRef.current || null,
-      media_urls: welcomeMediaUrlsRef.current,
-      bypass_triggers: bypassTriggersRef.current,
-      welcome_sequence: welcomeSequenceRef.current,
-    });
+  const handleSaveMatches = () => {
+    saveSettings("predefined_matches", predefinedMatchesRef.current);
   };
 
-  // Sync sequence when media urls change
-  const handleMediaUrlsChange = (newUrls: string[]) => {
-    setWelcomeMediaUrls(newUrls);
-    setWelcomeSequence(prev => {
-      // Remove sequence items for removed media
-      const filtered = prev.filter(item => 
-        item.type === "text" || (item.type === "media" && newUrls.includes(item.url))
-      );
-      // Add new media items not yet in sequence
-      const existingUrls = new Set(filtered.filter(i => i.type === "media").map(i => (i as any).url));
-      const newItems = newUrls.filter(u => !existingUrls.has(u)).map(u => ({ type: "media" as const, url: u }));
-      const newSequence = [...filtered, ...newItems];
-
-      // Auto-save when media changes
-      setTimeout(() => {
-        saveSettings("welcome_message", { 
-          text: welcomeMessageRef.current, 
-          media_url: welcomeMediaUrlRef.current || null,
-          media_urls: newUrls,
-          bypass_triggers: bypassTriggersRef.current,
-          welcome_sequence: newSequence,
-        });
-      }, 100);
-
-      return newSequence;
-    });
+  const addMatch = () => {
+    setPredefinedMatches((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        trigger_sentence: "",
+        reply_text: "",
+        media_urls: [],
+        order: "text_first",
+      },
+    ]);
   };
 
-  const moveSequenceItem = (index: number, direction: "up" | "down") => {
-    setWelcomeSequence(prev => {
-      const arr = [...prev];
-      const targetIndex = direction === "up" ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= arr.length) return arr;
-      
-      const temp = arr[index];
-      arr[index] = arr[targetIndex];
-      arr[targetIndex] = temp;
-      
-      // Auto-save when order changes
-      setTimeout(() => {
-        saveSettings("welcome_message", { 
-          text: welcomeMessageRef.current, 
-          media_url: welcomeMediaUrlRef.current || null,
-          media_urls: welcomeMediaUrlsRef.current,
-          bypass_triggers: bypassTriggersRef.current,
-          welcome_sequence: arr,
-        });
-      }, 100);
-      
-      return arr;
-    });
+  const removeMatch = (id: string) => {
+    setPredefinedMatches((prev) => prev.filter((m) => m.id !== id));
+    // Auto-save after removing
+    setTimeout(handleSaveMatches, 100);
   };
 
-  const addBypassTrigger = () => {
-    const trimmed = newBypassTrigger.trim();
-    if (!trimmed) return;
-    if (bypassTriggers.includes(trimmed.toLowerCase())) {
-      toast({ title: "Trigger already exists", variant: "destructive" });
-      return;
-    }
-    setBypassTriggers(prev => [...prev, trimmed.toLowerCase()]);
-    setNewBypassTrigger("");
-  };
-
-  const removeBypassTrigger = (trigger: string) => {
-    setBypassTriggers(prev => prev.filter(t => t !== trigger));
+  const updateMatch = (id: string, updates: Partial<PredefinedMatch>) => {
+    setPredefinedMatches((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+    );
   };
 
   const handleSavePayment = () => {
@@ -835,153 +763,98 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="chatbot" className="space-y-6">
-            {/* Welcome Message */}
+            {/* Predefined Matches */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5" />
-                  Welcome Message
-                </CardTitle>
-                <CardDescription>
-                  This message is sent when a customer first contacts your chatbot
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="welcome">Message</Label>
-                  <Textarea
-                    id="welcome"
-                    value={welcomeMessage}
-                    onChange={(e) => {
-                      setWelcomeMessage(e.target.value);
-                      // Ensure text item exists in sequence
-                      if (e.target.value.trim() && !welcomeSequence.some(i => i.type === "text")) {
-                        setWelcomeSequence(prev => [{ type: "text" }, ...prev]);
-                      }
-                    }}
-                    placeholder="Welcome! How can I help you today?"
-                    rows={4}
-                  />
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    Predefined Matches
+                  </CardTitle>
+                  <CardDescription>
+                    Automatically reply with specific messages when the customer sends an exact sentence
+                  </CardDescription>
                 </div>
-                <WelcomeMediaUpload
-                  mediaUrls={welcomeMediaUrls}
-                  onChange={handleMediaUrlsChange}
-                  maxFiles={5}
-                />
-
-                {/* Sending Order */}
-                {welcomeSequence.length > 1 && (
-                  <div className="space-y-2 border-t pt-4">
-                    <Label className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4" />
-                      Sending Order
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Arrange the order in which welcome content is sent to the customer
-                    </p>
-                    <div className="space-y-2">
-                      {welcomeSequence.map((item, index) => {
-                        const isText = item.type === "text";
-                        const mediaUrl = !isText ? (item as { type: "media"; url: string }).url : "";
-                        const isAudio = /\.(mp3|wav|ogg|m4a|aac|opus)$/i.test(mediaUrl);
-                        const isVideo = /\.(mp4|mov|avi|webm)$/i.test(mediaUrl);
-                        const isDoc = /\.pdf$/i.test(mediaUrl);
-                        const fileName = mediaUrl ? mediaUrl.split("/").pop()?.split("?")[0] || "media" : "";
-                        
-                        return (
-                          <div
-                            key={isText ? "text" : mediaUrl}
-                            className="flex items-center gap-2 p-2 rounded-md border bg-card"
-                          >
-                            <span className="text-xs font-mono text-muted-foreground w-5 text-center">{index + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              {isText ? (
-                                <span className="text-sm font-medium flex items-center gap-1.5">
-                                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                                  Welcome Text
-                                </span>
-                              ) : (
-                                <span className="text-sm flex items-center gap-1.5 truncate">
-                                  {isAudio ? "🎵" : isVideo ? "🎬" : isDoc ? "📄" : "🖼️"}
-                                  <span className="truncate">{fileName}</span>
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={index === 0}
-                                onClick={() => moveSequenceItem(index, "up")}
-                              >
-                                <ArrowUp className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={index === welcomeSequence.length - 1}
-                                onClick={() => moveSequenceItem(index, "down")}
-                              >
-                                <ArrowDown className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bypass Triggers */}
-                <div className="space-y-2 border-t pt-4">
-                  <Label>Bypass Triggers</Label>
-                  <p className="text-xs text-muted-foreground">
-                    If a customer's first message contains any of these keywords, the welcome message and media will be skipped.
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newBypassTrigger}
-                      onChange={(e) => setNewBypassTrigger(e.target.value)}
-                      placeholder="e.g. reorder, urgent, support"
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addBypassTrigger())}
-                    />
-                    <Button type="button" variant="outline" size="sm" onClick={addBypassTrigger}>
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {bypassTriggers.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {bypassTriggers.map((trigger) => (
-                        <span
-                          key={trigger}
-                          className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium"
-                        >
-                          {trigger}
-                          <button
-                            type="button"
-                            onClick={() => removeBypassTrigger(trigger)}
-                            className="ml-1 text-muted-foreground hover:text-destructive"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Button onClick={handleSaveWelcome} disabled={saving}>
-                  {saving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save Message
+                <Button variant="outline" size="sm" onClick={addMatch}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Match
                 </Button>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {predefinedMatches.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                    No predefined matches. Click "Add Match" to create one.
+                  </div>
+                ) : (
+                  predefinedMatches.map((match, index) => (
+                    <div key={match.id} className="border p-4 rounded-lg space-y-4 relative bg-card">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-2 text-destructive hover:bg-destructive/10"
+                        onClick={() => removeMatch(match.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      
+                      <div className="space-y-2 max-w-[90%]">
+                        <Label>When user says (Exact Sentence):</Label>
+                        <Input
+                          value={match.trigger_sentence}
+                          onChange={(e) => updateMatch(match.id, { trigger_sentence: e.target.value })}
+                          placeholder="e.g. I want to know more about XYZ product"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Bot replies with:</Label>
+                        <Textarea
+                          value={match.reply_text}
+                          onChange={(e) => updateMatch(match.id, { reply_text: e.target.value })}
+                          placeholder="e.g. Sure, here are the details..."
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="pt-2 border-t">
+                        <Label className="mb-2 block">Attached Images (Max 10)</Label>
+                        <WelcomeMediaUpload
+                          mediaUrls={match.media_urls}
+                          onChange={(newUrls) => {
+                            updateMatch(match.id, { media_urls: newUrls });
+                            setTimeout(handleSaveMatches, 100);
+                          }}
+                          maxFiles={10}
+                        />
+                      </div>
+
+                      {match.media_urls.length > 0 && (
+                        <div className="flex items-center gap-3 pt-2">
+                          <Label>Order:</Label>
+                          <select 
+                            className="text-sm border rounded-md p-1.5 bg-background"
+                            value={match.order}
+                            onChange={(e) => updateMatch(match.id, { order: e.target.value as any })}
+                          >
+                            <option value="text_first">Send Reply First, Then Images</option>
+                            <option value="media_first">Send Images First, Then Reply</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+                
+                <div className="pt-4 border-t">
+                  <Button onClick={handleSaveMatches} disabled={saving} className="w-full sm:w-auto">
+                    {saving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save All Matches
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

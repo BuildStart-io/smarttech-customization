@@ -222,7 +222,11 @@ async function processMessage(
     return;
   }
 
-  // 4. Check if first message (for welcome message flow)
+  // 4. Check predefined matches
+  const matched = await handlePredefinedMatches(supabase, supabaseUrl, supabaseServiceKey, userId, phoneNumber, messageText, sessionApiKey, corrId, timings, mark);
+  if (matched) return;
+
+  // 4b. Check if first message (for original welcome message flow)
   const { count: convoCount } = await supabase
     .from("conversations")
     .select("id", { count: "exact", head: true })
@@ -363,6 +367,85 @@ async function processMessage(
   mark("send_end");
 }
 
+async function handlePredefinedMatches(
+  supabase: any,
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  userId: string,
+  phoneNumber: string,
+  messageText: string,
+  sessionApiKey: string,
+  corrId: string,
+  timings: Record<string, number>,
+  mark: (label: string) => void
+): Promise<boolean> {
+  const { data: matchSettings } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "predefined_matches")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!matchSettings || !matchSettings.value || !Array.isArray(matchSettings.value)) {
+    return false;
+  }
+
+  const matches: Array<{
+    trigger_sentence: string;
+    reply_text: string;
+    media_urls: string[];
+    order: "text_first" | "media_first";
+  }> = matchSettings.value;
+
+  const userTextLower = messageText.trim().toLowerCase();
+  
+  // Exact sentence match (case-insensitive)
+  const match = matches.find(m => m.trigger_sentence.trim().toLowerCase() === userTextLower);
+
+  if (!match) {
+    return false;
+  }
+
+  console.log(`[${corrId}] Predefined match found for: "${match.trigger_sentence}"`);
+
+  mark("send_start");
+  const sendText = async () => {
+    if (match.reply_text.trim()) {
+      await sendWhatsApp(supabaseUrl, supabaseServiceKey, phoneNumber, match.reply_text, null, sessionApiKey);
+    }
+  };
+  
+  const sendMedia = async () => {
+    for (const url of (match.media_urls || [])) {
+      await sendWhatsAppMedia(supabaseUrl, supabaseServiceKey, phoneNumber, url, sessionApiKey);
+    }
+  };
+
+  if (match.order === "media_first") {
+    await sendMedia();
+    await sendText();
+  } else {
+    await sendText();
+    await sendMedia();
+  }
+  mark("send_end");
+
+  // Insert predefined match reply into conversation history
+  if (match.reply_text.trim()) {
+    await supabase.from("conversations").insert({
+      phone_number: phoneNumber,
+      message: match.reply_text,
+      direction: "outbound",
+      message_type: "text",
+      metadata: { type: "predefined_match", correlationId: corrId },
+      user_id: userId,
+    });
+    console.log(`[${corrId}] Stored predefined match reply in conversation history`);
+  }
+
+  return true;
+}
+
 async function handleWelcomeMessage(
   supabase: any,
   supabaseUrl: string,
@@ -380,10 +463,12 @@ async function handleWelcomeMessage(
     .select("value")
     .eq("key", "welcome_message")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
+
+  if (!welcomeSettings || !welcomeSettings.value) return false;
 
   // Check bypass triggers
-  const bypassTriggers: string[] = welcomeSettings?.value?.bypass_triggers || [];
+  const bypassTriggers: string[] = welcomeSettings.value.bypass_triggers || [];
   const msgLower = messageText.toLowerCase();
   const shouldBypass = bypassTriggers.length > 0 && bypassTriggers.some((t: string) => msgLower.includes(t));
 
@@ -392,14 +477,14 @@ async function handleWelcomeMessage(
     return false;
   }
 
-  const welcomeText: string = welcomeSettings?.value?.text || "";
-  const welcomeMediaUrls: string[] = welcomeSettings?.value?.media_urls || [];
-  const singleMedia = welcomeSettings?.value?.media_url;
+  const welcomeText: string = welcomeSettings.value.text || "";
+  const welcomeMediaUrls: string[] = welcomeSettings.value.media_urls || [];
+  const singleMedia = welcomeSettings.value.media_url;
   if (singleMedia && !welcomeMediaUrls.includes(singleMedia)) {
     welcomeMediaUrls.unshift(singleMedia);
   }
 
-  const welcomeSequence: Array<{ type: string; url?: string }> = welcomeSettings?.value?.welcome_sequence || [];
+  const welcomeSequence: Array<{ type: string; url?: string }> = welcomeSettings.value.welcome_sequence || [];
 
   mark("send_start");
   if (welcomeSequence.length > 0) {

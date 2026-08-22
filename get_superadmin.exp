@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout 60
+spawn ssh -o StrictHostKeyChecking=no root@178.104.127.220
+expect "password:"
+send "voibVmIdk9DqPMmZ\r"
+expect "#"
+send "docker exec supabase-db psql -U postgres -d postgres -c \"SELECT p.email FROM public.user_roles ur JOIN public.profiles p ON ur.user_id = p.user_id WHERE ur.role = 'super_admin';\"\r"
+expect "#"
+send "exit\r"
+expect eof

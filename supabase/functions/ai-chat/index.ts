@@ -401,17 +401,28 @@ CRITICAL SECURITY RULE:
           if (recentOrders && recentOrders.length > 0) {
             console.log("Duplicate order detected, skipping creation. Existing:", recentOrders[0].id);
           } else {
+            const items = orderData.order_items || orderData.products || orderData.items || [];
+            const name = orderData.customer_name || orderData.customer_info?.name || "WhatsApp Customer";
+            const phone = orderData.customer_phone || orderData.customer_info?.phone || phoneNumber;
+            const district = orderData.district || orderData.customer_info?.district || null;
+            const address = orderData.customer_address || orderData.customer_info?.address || null;
+            const total = orderData.total_amount || orderData.total_price || 0;
+            
+            let pm = String(orderData.payment_method || "cod").toLowerCase();
+            if (pm.includes("bank") || pm.includes("transfer")) pm = "bank_transfer";
+            else pm = "cod"; // Default to cod for any other variations like 'Cash on Delivery'
+
             const { data: orderResult, error: orderError } = await supabase
               .from("orders")
               .insert({
-                customer_name: orderData.customer_name || "WhatsApp Customer",
-                customer_phone: orderData.customer_phone || phoneNumber,
+                customer_name: name,
+                customer_phone: phone,
                 whatsapp_phone: phoneNumber,
-                district: orderData.district || null,
-                customer_address: orderData.customer_address || null,
-                order_items: orderData.order_items || [],
-                payment_method: orderData.payment_method || "cod",
-                total_amount: orderData.total_amount || 0,
+                district: district,
+                customer_address: address,
+                order_items: items,
+                payment_method: pm,
+                total_amount: total,
                 special_instructions: orderData.customer_email ? `Email: ${orderData.customer_email}` : null,
                 status: "pending",
                 user_id: userId,

@@ -519,11 +519,19 @@ CRITICAL SECURITY RULE:
       }
     }
 
-    // Extract image URLs if present
-    const imageUrlMatch = responseText.match(/<IMAGE_URL>([\s\S]*?)<\/IMAGE_URL>/);
-    const imageUrls = imageUrlMatch 
-      ? imageUrlMatch[1].split(',').map(url => url.trim()).filter(Boolean)
-      : [];
+    // Extract image URLs if present (handles multiple tags and comma-separated lists)
+    const imageUrls: string[] = [];
+    const imageTagMatches = [...responseText.matchAll(/<IMAGE_URL>([\s\S]*?)<\/IMAGE_URL>/g)];
+    for (const match of imageTagMatches) {
+      if (match[1]) {
+        match[1].split(',').forEach(url => {
+          const trimmed = url.trim();
+          if (trimmed && !imageUrls.includes(trimmed)) {
+            imageUrls.push(trimmed);
+          }
+        });
+      }
+    }
 
     // Extract video URL if present
     const videoUrlMatch = responseText.match(/<VIDEO_URL>([\s\S]*?)<\/VIDEO_URL>/);

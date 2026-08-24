@@ -253,7 +253,8 @@ ${welcomeMessage}
 When the customer completes an order, summarize the order details beautifully with emojis and confirm.
 
 CRITICAL ORDER INSTRUCTION:
-When you have collected ALL required order details and the customer confirms, you MUST include a JSON block in your response wrapped in <ORDER_JSON> tags like this:
+1. You MUST collect the customer's name and delivery address (for physical products) BEFORE confirming an order. DO NOT say the order is confirmed until you have these details!
+2. Once ALL details are collected and the customer confirms, you MUST include a JSON block in your response wrapped in <ORDER_JSON> tags. This is REQUIRED for the system to save the order.
 - For PHYSICAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","district":"...","customer_address":"...","order_items":[{"name":"...","price":...,"quantity":...,"product_type":"physical"}],"payment_method":"cod or bank_transfer","total_amount":...}</ORDER_JSON>
 - For DIGITAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","customer_email":"...","customer_address":null,"order_items":[{"name":"...","price":...,"quantity":...,"product_type":"digital"}],"payment_method":"bank_transfer","total_amount":...}</ORDER_JSON>
 Include this JSON block at the END of your confirmation message. The customer won't see the JSON tags.
@@ -403,7 +404,7 @@ CRITICAL SECURITY RULE:
             const { data: orderResult, error: orderError } = await supabase
               .from("orders")
               .insert({
-                customer_name: orderData.customer_name,
+                customer_name: orderData.customer_name || "WhatsApp Customer",
                 customer_phone: orderData.customer_phone || phoneNumber,
                 whatsapp_phone: phoneNumber,
                 district: orderData.district || null,

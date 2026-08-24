@@ -281,12 +281,13 @@ CRITICAL SECURITY RULE:
       }
     }
 
+    const systemReminder = "\n\n[SYSTEM REMINDER: If the user is confirming an order, or if you are confirming an order in this response, you MUST output the <ORDER_JSON>{...}</ORDER_JSON> block at the very end. Otherwise, the order will be lost!]";
     // Handle photo/media messages - users often send payment slips
     const trimmedMessage = (message || "").trim();
     if (!trimmedMessage) {
-      messages.push({ role: "user", content: "[Customer sent a photo/media file. This is likely a payment slip or receipt. Acknowledge it politely and ask them to confirm if it's a payment confirmation. Do NOT output any JSON, tags, or code.]" });
+      messages.push({ role: "user", content: "[Customer sent a photo/media file. This is likely a payment slip or receipt. Acknowledge it politely and ask them to confirm if it's a payment confirmation. Do NOT output any JSON, tags, or code.]" + systemReminder });
     } else {
-      messages.push({ role: "user", content: trimmedMessage });
+      messages.push({ role: "user", content: trimmedMessage + systemReminder });
     }
 
     // ------------------------------------------------------------------

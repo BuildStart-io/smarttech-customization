@@ -401,7 +401,14 @@ CRITICAL SECURITY RULE:
           if (recentOrders && recentOrders.length > 0) {
             console.log("Duplicate order detected, skipping creation. Existing:", recentOrders[0].id);
           } else {
-            const items = orderData.order_items || orderData.products || orderData.items || [];
+            const rawItems = orderData.order_items || orderData.products || orderData.items || [];
+            const items = rawItems.map((item: any) => ({
+              name: item.name || item.product_id || item.product_name || item.title || "Unknown Product",
+              price: item.price || 0,
+              quantity: item.quantity || 1,
+              product_type: item.product_type || "physical",
+              variant: item.variant || item.variant_id || undefined
+            }));
             const name = orderData.customer_name || orderData.customer_info?.name || "WhatsApp Customer";
             const phone = orderData.customer_phone || orderData.customer_info?.phone || phoneNumber;
             const district = orderData.district || orderData.customer_info?.district || null;

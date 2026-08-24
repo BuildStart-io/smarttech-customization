@@ -300,7 +300,7 @@ CRITICAL SECURITY RULE:
     const aiGenerateUrl = Deno.env.get("AI_GENERATE_URL");
     const botApiKey = Deno.env.get("BOT_API_KEY");
     const MODEL = "google/gemini-3-flash-preview";
-    const MAX_TOKENS = 500;
+    const MAX_TOKENS = 1500;
 
     let aiResponse: Response;
     if (aiGenerateUrl && botApiKey) {
@@ -350,7 +350,7 @@ CRITICAL SECURITY RULE:
       "I'm sorry, I couldn't process your request. Please try again.";
 
 
-    console.log(`AI Response: ${responseText.substring(0, 100)}...`);
+    console.log(`AI Response FULL: ${responseText}`);
 
     // Extract used FAQ IDs and log tracked ones
     const usedFaqsMatch = responseText.match(/<USED_FAQS>([\s\S]*?)<\/USED_FAQS>/);
@@ -596,6 +596,7 @@ CRITICAL SECURITY RULE:
       }
     }
 
+    console.log("Extracted image URLs:", imageUrls);
     return new Response(
       JSON.stringify({ response: cleanResponse, imageUrls, videoUrl, followupMessage, faqMedia }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

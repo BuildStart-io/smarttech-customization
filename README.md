@@ -29,3 +29,4 @@ Ensure the `.env` configuration contains your custom SmartTech Bot API key:
 - `BOT_API_KEY`: [YOUR_SMARTTECH_BOT_API_KEY]
 
 *(Note: Never commit local `.env` files to this repository).*
+- Fixed AI edge cases related to token limits and image URL list formatting

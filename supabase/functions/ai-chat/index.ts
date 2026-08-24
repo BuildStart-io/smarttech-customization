@@ -252,9 +252,9 @@ ${welcomeMessage}
 
 When the customer completes an order, summarize the order details beautifully with emojis and confirm.
 
-CRITICAL ORDER INSTRUCTION:
+CRITICAL ORDER INSTRUCTION (STRICTLY FOLLOW THIS):
 1. You MUST collect the customer's name and delivery address (for physical products) BEFORE confirming an order. DO NOT say the order is confirmed until you have these details!
-2. Once ALL details are collected and the customer confirms, you MUST include a JSON block in your response wrapped in <ORDER_JSON> tags. This is REQUIRED for the system to save the order.
+2. Once ALL details are collected and the customer confirms, you MUST include a JSON block in your response wrapped in <ORDER_JSON> tags. This is ABSOLUTELY REQUIRED for the system to save the order to the database. If you forget to output this tag when confirming the order, the order will be LOST!
 - For PHYSICAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","district":"...","customer_address":"...","order_items":[{"name":"...","price":...,"quantity":...,"product_type":"physical"}],"payment_method":"cod or bank_transfer","total_amount":...}</ORDER_JSON>
 - For DIGITAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","customer_email":"...","customer_address":null,"order_items":[{"name":"...","price":...,"quantity":...,"product_type":"digital"}],"payment_method":"bank_transfer","total_amount":...}</ORDER_JSON>
 Include this JSON block at the END of your confirmation message.
